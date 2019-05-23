@@ -1,23 +1,32 @@
 using BinaryBuilder
 
 
-src_version = v"2.4.1"  # also change in raw script string
+src_version = v"3.0.0"  # also change in raw script string
 
 # Collection of sources required to build GDAL
 sources = [
     "https://download.osgeo.org/gdal/$src_version/gdal-$src_version.tar.xz" =>
-    "fd51b4900b2fc49b98d8714f55fc8a78ebfd07218357f93fb796791115a5a1ad",
+    "ad316fa052d94d9606e90b20a514b92b2dd64e3142dfdbd8f10981a5fcd5c43e",
 ]
 
 # Bash recipe for building across all platforms
 script = raw"""
 cd $WORKSPACE/srcdir
-cd gdal-2.4.1/
+cd gdal-3.0.0/
 
-# Windows builds gave a libtool issue,
-# Linux gave an issue on some builds without it.
 if [[ ${target} == *w64-mingw32* ]]; then
+    # Windows builds gave a libtool issue,	
+    # Linux gave an issue on some builds without it.
     LIBTOOL_USAGE=--without-libtool
+    # Symlink libproj for Windows, else configure couldn't find it
+    # TODO fix in PROJBuilder or in GDAL configure?
+    ln -s $prefix/lib/libproj_6_1.dll.a $prefix/lib/libproj.dll.a
+elif [[ ${target} == *freebsd* ]]; then
+    # FreeBSD's default Clang ran into issues with configure
+    # which seemed to think it was the GNU compiler. Therefore,
+    # let's just use the GNU compiler instead.
+    CC=gcc
+    CXX=g++
 fi
 
 # Show options in the log
@@ -25,14 +34,17 @@ fi
 
 ./configure --prefix=$prefix --host=$target \
     --with-geos=$prefix/bin/geos-config \
-    --with-static-proj4=$prefix \
+    --with-proj=$prefix \
     --with-libz=$prefix \
     --with-sqlite3=$prefix \
     --with-curl=$prefix/bin/curl-config \
-    --without-python \
+    --with-python=no \
     --enable-shared=yes \
     --enable-static=no \
+    "CC=$CC" \
+    "CXX=$CXX" \
     ${LIBTOOL_USAGE}
+
 make -j${nproc}
 make install
 """
@@ -76,11 +88,11 @@ products(prefix) = [
 
 # Dependencies that must be installed before this package can be built
 dependencies = [
-    "https://github.com/JuliaGeo/GEOSBuilder/releases/download/v3.7.1-5/build_GEOS.v3.7.1.jl",
-    "https://github.com/JuliaGeo/PROJBuilder/releases/download/v5.2.0-0/build_PROJ.v5.2.0.jl",
+    "https://github.com/JuliaGeo/GEOSBuilder/releases/download/v3.7.2-0/build_GEOS.v3.7.2.jl",
+    "https://github.com/JuliaGeo/PROJBuilder/releases/download/v6.1.0-1/build_PROJ.v6.1.0.jl",
     "https://github.com/bicycle1885/ZlibBuilder/releases/download/v1.0.4/build_Zlib.v1.2.11.jl",
-    "https://github.com/JuliaDatabases/SQLiteBuilder/releases/download/v0.9.0/build_SQLiteBuilder.v0.1.0.jl",
-    "https://github.com/JuliaWeb/LibCURLBuilder/releases/download/v0.4.0/build_LibCURL.v7.64.0.jl"
+    "https://github.com/JuliaDatabases/SQLiteBuilder/releases/download/v0.10.0/build_SQLite.v3.28.0.jl",
+    "https://github.com/JuliaWeb/LibCURLBuilder/releases/download/v0.5.1/build_LibCURL.v7.64.1.jl"
 ]
 
 # Build the tarballs, and possibly a `build.jl` as well.
